@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Kotak Infak</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+  <style>
+    :root {
+      --green: #16a34a;
+      --green-light: #dcfce7;
+      --green-dark: #15803d;
+      --red: #dc2626;
+      --red-light: #fee2e2;
+      --orange: #ea580c;
+      --orange-light: #ffedd5;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-800: #1f2937;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-800);
+      min-height: 100vh;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* ── Screens ── */
+    .screen { display: none; min-height: 100vh; flex-direction: column; }
+    .screen.active { display: flex; }
+
+    /* ── Header ── */
+    .header {
+      background: var(--green);
+      color: #fff;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: var(--shadow-md);
+    }
+    .header h1 { font-size: 18px; font-weight: 700; flex: 1; }
+    .header .subtitle { font-size: 12px; opacity: .8; }
+    .btn-icon {
+      background: none; border: none; color: #fff;
+      padding: 6px; cursor: pointer; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
+    }
+    .btn-icon:hover { background: rgba(255,255,255,.15); }
+
+    /* ── Bottom Nav ── */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 480px;
+      background: #fff;
+      border-top: 1px solid var(--gray-200);
+      display: flex;
+      z-index: 20;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 10px 4px 8px; gap: 3px;
+      background: none; border: none; cursor: pointer;
+      font-size: 10px; color: var(--gray-400);
+      transition: color .15s;
+    }
+    .nav-item.active { color: var(--green); }
+    .nav-item svg { width: 22px; height: 22px; }
+
+    /* ── Content ── */
+    .content { flex: 1; padding: 16px; padding-bottom: 80px; overflow-y: auto; }
+
+    /* ── Cards ── */
+    .card {
+      background: #fff; border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 16px; margin-bottom: 12px;
+    }
+    .card-title { font-size: 13px; color: var(--gray-600); font-weight: 500; margin-bottom: 4px; }
+    .card-value { font-size: 28px; font-weight: 700; color: var(--green); }
+    .card-row { display: flex; gap: 10px; }
+    .card-row .card { flex: 1; margin-bottom: 0; }
+
+    /* ── Stat grid ── */
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .stat-card {
+      background: #fff; border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 14px;
+    }
+    .stat-card.danger { background: var(--red-light); }
+    .stat-card.warning { background: var(--orange-light); }
+    .stat-card .label { font-size: 11px; color: var(--gray-600); font-weight: 500; margin-bottom: 4px; }
+    .stat-card .value { font-size: 26px; font-weight: 700; color: var(--gray-800); }
+    .stat-card.danger .value { color: var(--red); }
+    .stat-card.warning .value { color: var(--orange); }
+
+    /* ── Login ── */
+    #login-screen {
+      justify-content: center; align-items: center;
+      padding: 32px 24px; background: #fff;
+    }
+    .login-logo { text-align: center; margin-bottom: 32px; }
+    .login-logo svg { width: 64px; height: 64px; color: var(--green); }
+    .login-logo h1 { font-size: 24px; font-weight: 800; color: var(--green); margin-top: 8px; }
+    .login-logo p { font-size: 14px; color: var(--gray-600); margin-top: 4px; }
+
+    /* ── Forms ── */
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: var(--gray-600); margin-bottom: 6px; }
+    input, select, textarea {
+      width: 100%; padding: 12px 14px; border: 1.5px solid var(--gray-200);
+      border-radius: 10px; font-size: 15px; color: var(--gray-800);
+      background: #fff; outline: none; transition: border .15s;
+      -webkit-appearance: none; appearance: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--green); }
+    textarea { resize: vertical; min-height: 80px; }
+    .btn {
+      width: 100%; padding: 14px; border: none; border-radius: 10px;
+      font-size: 16px; font-weight: 700; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn-primary { background: var(--green); color: #fff; }
+    .btn-primary:hover { opacity: .9; }
+    .btn-secondary {
+      background: var(--gray-100); color: var(--gray-800);
+      border: 1.5px solid var(--gray-200);
+    }
+
+    /* ── Badges & Tags ── */
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: 11px; font-weight: 600;
+    }
+    .badge-overdue { background: var(--red-light); color: var(--red); }
+    .badge-ok { background: var(--green-light); color: var(--green); }
+    .badge-warning { background: var(--orange-light); color: var(--orange); }
+    .badge-type { background: var(--gray-100); color: var(--gray-600); }
+
+    /* ── Location list ── */
+    .filter-bar {
+      display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto;
+      padding-bottom: 4px; -webkit-overflow-scrolling: touch;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .filter-chip {
+      white-space: nowrap; padding: 6px 14px; border-radius: 20px;
+      border: 1.5px solid var(--gray-200); background: #fff;
+      font-size: 13px; cursor: pointer; transition: all .15s;
+      flex-shrink: 0;
+    }
+    .filter-chip.active {
+      background: var(--green); color: #fff; border-color: var(--green);
+    }
+
+    .loc-card {
+      background: #fff; border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 14px; margin-bottom: 10px;
+      border-left: 4px solid var(--green);
+      cursor: pointer; transition: box-shadow .15s;
+    }
+    .loc-card.overdue { border-left-color: var(--red); }
+    .loc-card:active { box-shadow: var(--shadow-md); }
+    .loc-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .loc-name { font-size: 15px; font-weight: 700; }
+    .loc-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+    .loc-addr { font-size: 12px; color: var(--gray-600); margin-bottom: 6px; }
+    .loc-footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--gray-400); }
+
+    /* ── Penarikan list ── */
+    .pull-card {
+      background: #fff; border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 14px; margin-bottom: 10px;
+    }
+    .pull-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+    .pull-loc { font-size: 14px; font-weight: 700; }
+    .pull-amount { font-size: 18px; font-weight: 800; color: var(--green); }
+    .pull-meta { font-size: 12px; color: var(--gray-400); }
+
+    /* ── Wilayah section ── */
+    .section-title { font-size: 14px; font-weight: 700; color: var(--gray-600); margin-bottom: 10px; margin-top: 16px; }
+    .wilayah-row {
+      background: #fff; border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 14px; margin-bottom: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .wilayah-name { font-size: 14px; font-weight: 600; }
+    .wilayah-stats { text-align: right; font-size: 12px; color: var(--gray-600); }
+    .wilayah-total { font-size: 16px; font-weight: 700; color: var(--green); }
+
+    /* ── FAB ── */
+    .fab {
+      position: fixed; bottom: 76px; right: 50%;
+      transform: translateX(calc(50% - 16px + 240px - 32px));
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--green); color: #fff; border: none;
+      box-shadow: 0 4px 12px rgba(22,163,74,.4);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 26px; z-index: 15;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .fab:active { transform: translateX(calc(50% - 16px + 240px - 32px)) scale(.92); }
+
+    /* ── Modal/Sheet ── */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.45); z-index: 30;
+      align-items: flex-end; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-sheet {
+      background: #fff; border-radius: 20px 20px 0 0;
+      padding: 20px 20px calc(env(safe-area-inset-bottom) + 20px);
+      width: 100%; max-width: 480px;
+      max-height: 90vh; overflow-y: auto;
+      animation: slideUp .25s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .modal-handle {
+      width: 40px; height: 4px; background: var(--gray-200);
+      border-radius: 2px; margin: 0 auto 16px;
+    }
+    .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      background: var(--gray-800); color: #fff; padding: 10px 20px;
+      border-radius: 20px; font-size: 14px; z-index: 50;
+      opacity: 0; transition: opacity .25s;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ── Image preview ── */
+    .img-preview {
+      width: 100%; height: 160px; object-fit: cover;
+      border-radius: 10px; margin-top: 8px;
+    }
+    .file-label {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; border: 1.5px dashed var(--gray-200);
+      border-radius: 10px; cursor: pointer; color: var(--gray-600);
+      font-size: 14px; transition: border .15s;
+    }
+    .file-label:hover { border-color: var(--green); }
+    input[type="file"] { display: none; }
+
+    /* ── Lokasi search results ── */
+    #lokasi-results:not(:empty) {
+      border: 1.5px solid var(--gray-200); border-radius: 10px;
+      overflow: hidden; margin-top: 6px; max-height: 240px; overflow-y: auto;
+    }
+    .lokasi-result-item {
+      padding: 12px 14px; border-bottom: 1px solid var(--gray-100);
+      cursor: pointer; background: #fff; transition: background .1s;
+    }
+    .lokasi-result-item:last-child { border-bottom: none; }
+    .lokasi-result-item:active { background: var(--gray-50); }
+    .lokasi-result-name { font-size: 14px; font-weight: 600; }
+    .lokasi-result-sub { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+    .lokasi-no-result { padding: 12px 14px; font-size: 13px; color: var(--gray-400); }
+    mark { background: var(--green-light); color: var(--green-dark); border-radius: 2px; }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center; padding: 48px 24px; color: var(--gray-400);
+    }
+    .empty svg { width: 56px; height: 56px; margin-bottom: 12px; opacity: .4; }
+    .empty p { font-size: 14px; }
+
+    /* ── Loading ── */
+    .spinner {
+      width: 36px; height: 36px; border: 3px solid var(--gray-200);
+      border-top-color: var(--green); border-radius: 50%;
+      animation: spin .7s linear infinite; margin: 32px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Detail sheet content ── */
+    .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--gray-100); font-size: 14px; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-key { color: var(--gray-600); }
+    .detail-val { font-weight: 600; text-align: right; }
+
+    .user-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,.2); border-radius: 20px;
+      padding: 4px 10px; font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="login-screen" class="screen active">
+  <div class="login-logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round"
+        d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h1.5m-1.5 0h-1.5m-9 0H6m-1.5 0H3"/>
+    </svg>
+    <h1>Kotak Infak</h1>
+    <p>Sistem Manajemen Kotak Infak</p>
+  </div>
+  <form id="login-form">
+    <div class="form-group">
+      <label>Nama Petugas</label>
+      <input id="login-nama" type="text" placeholder="Masukkan nama Anda" required autocomplete="off" />
+    </div>
+    <div class="form-group">
+      <label>Kode Wilayah</label>
+      <select id="login-wilayah" required>
+        <option value="">— Pilih wilayah —</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Masuk</button>
+  </form>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="app-screen" class="screen">
+
+  <!-- Header -->
+  <div class="header" id="app-header">
+    <div>
+      <h1 id="header-title">Dashboard</h1>
+      <div class="user-pill" id="header-user"></div>
+    </div>
+    <button class="btn-icon" id="btn-logout" title="Keluar">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M18 15l3-3m0 0-3-3m3 3H9"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Tab content -->
+  <div id="tab-dashboard" class="content"></div>
+  <div id="tab-lokasi" class="content" style="display:none"></div>
+  <div id="tab-penarikan" class="content" style="display:none"></div>
+
+  <!-- Bottom nav -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-tab="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/>
+      </svg>
+      Dashboard
+    </button>
+    <button class="nav-item" data-tab="lokasi">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"/>
+      </svg>
+      Lokasi
+    </button>
+    <button class="nav-item" data-tab="penarikan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0c1.1.128 1.907 1.077 1.907 2.185ZM9.75 9h.008v.008H9.75V9Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.125 4.5h.008v.008h-.008V13.5Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/>
+      </svg>
+      Penarikan
+    </button>
+  </nav>
+
+  <!-- FAB -->
+  <button class="fab" id="fab-btn" title="Tambah">+</button>
+</div>
+
+<!-- ══ MODAL: Tambah Lokasi ══ -->
+<div class="modal-backdrop" id="modal-lokasi">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Tambah Lokasi Baru</div>
+    <form id="form-lokasi">
+      <div class="form-group">
+        <label>Nama Lokasi <span style="color:var(--red)">*</span></label>
+        <input id="lok-nama" type="text" placeholder="cth: Masjid Al-Ikhlas" required />
+      </div>
+      <div class="form-group">
+        <label>Tipe Lokasi <span style="color:var(--red)">*</span></label>
+        <select id="lok-tipe" required>
+          <option value="">— Pilih tipe —</option>
+          <option value="masjid">Masjid</option>
+          <option value="mushola">Mushola</option>
+          <option value="toko">Toko / Warung</option>
+          <option value="kantor">Kantor</option>
+          <option value="sekolah">Sekolah</option>
+          <option value="lainnya">Lainnya</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Alamat</label>
+        <textarea id="lok-alamat" placeholder="Alamat lengkap..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Kecamatan</label>
+        <input id="lok-kecamatan" type="text" placeholder="cth: Beji" />
+      </div>
+      <div class="form-group">
+        <label>Kelurahan</label>
+        <input id="lok-kelurahan" type="text" placeholder="cth: Pondok Cina" />
+      </div>
+      <div class="form-group">
+        <label>Wilayah <span style="color:var(--red)">*</span></label>
+        <select id="lok-wilayah" required>
+          <option value="">— Pilih wilayah —</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">Simpan Lokasi</button>
+    </form>
+  </div>
+</div>
+
+<!-- ══ MODAL: Catat Penarikan ══ -->
+<div class="modal-backdrop" id="modal-penarikan">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Catat Penarikan</div>
+    <form id="form-penarikan">
+      <div class="form-group">
+        <label>Lokasi <span style="color:var(--red)">*</span></label>
+        <div id="lokasi-selected-box" style="display:none;align-items:center;gap:10px;padding:11px 14px;border:1.5px solid var(--green);border-radius:10px;background:#fff">
+          <div style="flex:1;min-width:0">
+            <div id="lokasi-selected-name" style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+            <div id="lokasi-selected-sub" style="font-size:12px;color:var(--gray-400);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+          </div>
+          <button type="button" id="lokasi-clear-btn" style="flex-shrink:0;background:var(--gray-100);border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--gray-600)">Ganti</button>
+        </div>
+        <input id="pen-lokasi-search" type="text" placeholder="Ketik nama, kecamatan, kelurahan..." autocomplete="off" />
+        <div id="lokasi-results"></div>
+        <input type="hidden" id="pen-lokasi" />
+      </div>
+      <div class="form-group">
+        <label>Tanggal Penarikan <span style="color:var(--red)">*</span></label>
+        <input id="pen-tanggal" type="date" required />
+      </div>
+      <div class="form-group">
+        <label>Jumlah (Rp) <span style="color:var(--red)">*</span></label>
+        <div style="position:relative">
+          <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--gray-400);font-size:15px;pointer-events:none">Rp</span>
+          <input id="pen-jumlah" type="text" inputmode="numeric" placeholder="0" required
+            style="padding-left:36px" autocomplete="off" />
+        </div>
+        <input type="hidden" id="pen-jumlah-raw" />
+      </div>
+      <div class="form-group">
+        <label>Foto (opsional)</label>
+        <label class="file-label" for="pen-foto">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"/>
+          </svg>
+          <span id="foto-label-text">Pilih foto...</span>
+        </label>
+        <input type="file" id="pen-foto" accept="image/*" capture="environment" />
+        <img id="foto-preview" class="img-preview" style="display:none" alt="preview" />
+      </div>
+      <div class="form-group">
+        <label>Catatan</label>
+        <textarea id="pen-catatan" placeholder="Catatan tambahan..."></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Simpan Penarikan</button>
+    </form>
+  </div>
+</div>
+
+<!-- ══ MODAL: Detail Lokasi ══ -->
+<div class="modal-backdrop" id="modal-detail">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div id="modal-detail-content"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://tvbogbggvpmhewwgewkc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_i_rOY9tMvLO4QO-XNlOjkw_M9was99f';
+
+if (typeof supabase === 'undefined') {
+  console.error('[init] supabase global TIDAK tersedia — CDN gagal dimuat');
+}
+console.log('[init] supabase global:', typeof supabase);
+console.log('[init] supabase.createClient:', typeof supabase?.createClient);
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+console.log('[init] sb client:', sb);
+
+// ── State ──
+let user = null;
+let wilayahList = [];
+let lokasiList = [];
+let penarikanList = [];
+let activeTab = 'dashboard';
+let activeFilter = 'all';
+
+// ── Helpers ──
+const $ = id => document.getElementById(id);
+const fmt = n => 'Rp ' + Number(n).toLocaleString('id-ID');
+const fmtDate = d => d ? new Date(d).toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' }) : '—';
+
+function daysSince(dateStr) {
+  if (!dateStr) return 9999;
+  const diff = Date.now() - new Date(dateStr).getTime();
+  return Math.floor(diff / 86400000);
+}
+
+function isOverdue(loc) {
+  const last = loc.last_pulled_at || loc.created_at;
+  return daysSince(last) > 35;
+}
+
+function toast(msg, duration = 2500) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function openModal(id) {
+  $(id).classList.add('open');
+}
+
+function closeModal(id) {
+  $(id).classList.remove('open');
+}
+
+// Close modals on backdrop click
+document.querySelectorAll('.modal-backdrop').forEach(el => {
+  el.addEventListener('click', e => {
+    if (e.target === el) closeModal(el.id);
+  });
+});
+
+// ── Auth ──
+function loadUser() {
+  const stored = localStorage.getItem('infak_user');
+  if (stored) user = JSON.parse(stored);
+}
+
+function saveUser(u) {
+  user = u;
+  localStorage.setItem('infak_user', JSON.stringify(u));
+}
+
+function logout() {
+  localStorage.removeItem('infak_user');
+  user = null;
+  showScreen('login-screen');
+}
+
+// ── Screen switch ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+// ── Load data ──
+async function loadWilayah() {
+  console.log('[loadWilayah] mulai fetch...');
+  console.log('[loadWilayah] URL:', SUPABASE_URL);
+  console.log('[loadWilayah] supabase client:', typeof sb, sb ? 'ok' : 'UNDEFINED');
+
+  let result;
+  try {
+    result = await sb.from('wilayah').select('*').order('nama');
+  } catch (err) {
+    console.error('[loadWilayah] exception saat fetch:', err);
+    showLoginError('Gagal terhubung ke server: ' + err.message);
+    return;
+  }
+
+  const { data, error, status, statusText } = result;
+  console.log('[loadWilayah] status:', status, statusText);
+  console.log('[loadWilayah] error:', error);
+  console.log('[loadWilayah] data:', data);
+
+  if (error) {
+    console.error('[loadWilayah] Supabase error:', error.code, error.message, error.details, error.hint);
+    showLoginError(`Error ${error.code || status}: ${error.message}`);
+    return;
+  }
+
+  wilayahList = data || [];
+  console.log('[loadWilayah] wilayahList loaded:', wilayahList.length, 'rows');
+
+  if (wilayahList.length === 0) {
+    console.warn('[loadWilayah] tabel wilayah kosong atau RLS memblokir akses anonim');
+    showLoginError('Tabel wilayah kosong atau akses ditolak (cek RLS policy).');
+  }
+
+  // Populate selects
+  const placeholder = '<option value="">— Pilih wilayah —</option>';
+  const opts = wilayahList.map(w => `<option value="${w.id}">${w.nama}${w.kode ? ' (' + w.kode + ')' : ''}</option>`).join('');
+  ['login-wilayah', 'lok-wilayah'].forEach(id => {
+    const el = $(id);
+    if (el) el.innerHTML = placeholder + opts;
+  });
+}
+
+function showLoginError(msg) {
+  let el = $('login-error');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'login-error';
+    el.style.cssText = 'background:#fee2e2;color:#dc2626;padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:16px;';
+    const form = $('login-form');
+    form.insertBefore(el, form.firstChild);
+  }
+  el.textContent = '⚠ ' + msg;
+}
+
+async function loadLokasi() {
+  const { data, error } = await sb
+    .from('lokasi')
+    .select('*, wilayah(id, nama, kode)')
+    .order('nama');
+  if (error) { console.error(error); return; }
+  lokasiList = data || [];
+}
+
+async function loadPenarikan() {
+  const { data, error } = await sb
+    .from('penarikan')
+    .select('*, lokasi(id, nama, wilayah_id, wilayah(nama))')
+    .order('tanggal', { ascending: false })
+    .limit(200);
+  if (error) { console.error(error); return; }
+  penarikanList = data || [];
+}
+
+// Compute last_pulled_at per lokasi from penarikan data
+function enrichLokasiWithPullDate() {
+  const lastMap = {};
+  penarikanList.forEach(p => {
+    const lid = p.lokasi_id;
+    if (!lastMap[lid] || p.tanggal > lastMap[lid]) {
+      lastMap[lid] = p.tanggal;
+    }
+  });
+  lokasiList = lokasiList.map(l => ({
+    ...l,
+    last_pulled_at: lastMap[l.id] || l.last_pulled_at || null
+  }));
+}
+
+// ── Tab rendering ──
+function renderDashboard() {
+  const total = penarikanList.reduce((s, p) => s + Number(p.jumlah || 0), 0);
+  const overdueCount = lokasiList.filter(isOverdue).length;
+  const totalLokasi = lokasiList.length;
+
+  // Per wilayah totals
+  const wilayahMap = {};
+  wilayahList.forEach(w => { wilayahMap[w.id] = { nama: w.nama, total: 0, lokasi: 0, overdue: 0 }; });
+  lokasiList.forEach(l => {
+    const wid = l.wilayah_id;
+    if (wilayahMap[wid]) {
+      wilayahMap[wid].lokasi++;
+      if (isOverdue(l)) wilayahMap[wid].overdue++;
+    }
+  });
+  penarikanList.forEach(p => {
+    const wid = p.lokasi?.wilayah_id;
+    if (wid && wilayahMap[wid]) wilayahMap[wid].total += Number(p.jumlah || 0);
+  });
+
+  const wilayahRows = Object.values(wilayahMap)
+    .filter(w => w.lokasi > 0)
+    .sort((a,b) => b.total - a.total)
+    .map(w => `
+      <div class="wilayah-row">
+        <div>
+          <div class="wilayah-name">${w.nama}</div>
+          <div style="font-size:12px;color:var(--gray-400);margin-top:2px">${w.lokasi} lokasi${w.overdue ? ` · <span style="color:var(--red)">${w.overdue} overdue</span>` : ''}</div>
+        </div>
+        <div class="wilayah-stats">
+          <div class="wilayah-total">${fmt(w.total)}</div>
+        </div>
+      </div>
+    `).join('');
+
+  // Recent 5 penarikan
+  const recentRows = penarikanList.slice(0, 5).map(p => `
+    <div class="pull-card">
+      <div class="pull-card-top">
+        <div class="pull-loc">${p.lokasi?.nama || '—'}</div>
+        <div class="pull-amount">${fmt(p.jumlah)}</div>
+      </div>
+      <div class="pull-meta">${fmtDate(p.tanggal)} · ${p.lokasi?.wilayah?.nama || '—'}</div>
+    </div>
+  `).join('');
+
+  $('tab-dashboard').innerHTML = `
+    <div class="card" style="background:var(--green);color:#fff;margin-bottom:12px">
+      <div class="card-title" style="color:rgba(255,255,255,.8)">Total Terkumpul</div>
+      <div class="card-value" style="color:#fff">${fmt(total)}</div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="label">Total Lokasi</div>
+        <div class="value">${totalLokasi}</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="label">Overdue (&gt;35 hr)</div>
+        <div class="value">${overdueCount}</div>
+      </div>
+    </div>
+    <div class="section-title">Per Wilayah</div>
+    ${wilayahRows || '<div class="empty"><p>Belum ada data wilayah.</p></div>'}
+    <div class="section-title">Penarikan Terakhir</div>
+    ${recentRows || '<div class="empty"><p>Belum ada penarikan.</p></div>'}
+  `;
+}
+
+function renderLokasi() {
+  // Filter chips
+  const chips = [
+    { id: 'all', label: 'Semua' },
+    { id: 'overdue', label: '🔴 Overdue' },
+    ...wilayahList.map(w => ({ id: w.id, label: w.nama }))
+  ];
+  const chipsHTML = chips.map(c => `
+    <button class="filter-chip ${activeFilter === c.id ? 'active' : ''}" data-filter="${c.id}">${c.label}</button>
+  `).join('');
+
+  let filtered = lokasiList;
+  if (activeFilter === 'overdue') filtered = lokasiList.filter(isOverdue);
+  else if (activeFilter !== 'all') filtered = lokasiList.filter(l => l.wilayah_id === activeFilter);
+
+  const cards = filtered.map(l => {
+    const overdue = isOverdue(l);
+    const days = daysSince(l.last_pulled_at);
+    const daysLabel = days === 9999 ? 'Belum pernah ditarik' : `${days} hari lalu`;
+    const badge = overdue
+      ? `<span class="badge badge-overdue">Overdue</span>`
+      : days <= 14
+        ? `<span class="badge badge-ok">Baru ditarik</span>`
+        : `<span class="badge badge-warning">Perlu perhatian</span>`;
+    return `
+      <div class="loc-card ${overdue ? 'overdue' : ''}" data-id="${l.id}">
+        <div class="loc-card-top">
+          <div class="loc-name">${l.nama}</div>
+          ${badge}
+        </div>
+        <div class="loc-meta">
+          <span class="badge badge-type">${l.tipe || '—'}</span>
+          <span style="font-size:12px;color:var(--gray-400)">${l.wilayah?.nama || '—'}</span>
+        </div>
+        ${l.alamat ? `<div class="loc-addr">${l.alamat}</div>` : ''}
+        <div class="loc-footer">
+          <span>Terakhir: ${daysLabel}</span>
+          <span style="color:var(--green);font-weight:600">›</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  $('tab-lokasi').innerHTML = `
+    <div class="filter-bar">${chipsHTML}</div>
+    ${filtered.length === 0 ? '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"/></svg><p>Tidak ada lokasi ditemukan.</p></div>' : cards}
+  `;
+
+  // Filter events
+  $('tab-lokasi').querySelectorAll('.filter-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeFilter = btn.dataset.filter;
+      renderLokasi();
+    });
+  });
+
+  // Card click → detail
+  $('tab-lokasi').querySelectorAll('.loc-card').forEach(card => {
+    card.addEventListener('click', () => showLokasiDetail(card.dataset.id));
+  });
+}
+
+function renderPenarikan() {
+  const rows = penarikanList.map(p => `
+    <div class="pull-card">
+      <div class="pull-card-top">
+        <div>
+          <div class="pull-loc">${p.lokasi?.nama || '—'}</div>
+          <div class="pull-meta">${p.lokasi?.wilayah?.nama || '—'}</div>
+        </div>
+        <div class="pull-amount">${fmt(p.jumlah)}</div>
+      </div>
+      <div class="pull-meta" style="margin-top:4px">
+        ${fmtDate(p.tanggal)}
+        ${p.catatan ? ` · ${p.catatan}` : ''}
+        ${p.foto_url ? ` · <a href="${p.foto_url}" target="_blank" style="color:var(--green)">📷 Foto</a>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  $('tab-penarikan').innerHTML = rows || `
+    <div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0c1.1.128 1.907 1.077 1.907 2.185Z"/>
+      </svg>
+      <p>Belum ada data penarikan.</p>
+    </div>
+  `;
+}
+
+function showLokasiDetail(locId) {
+  const l = lokasiList.find(x => x.id === locId);
+  if (!l) return;
+  const overdue = isOverdue(l);
+  const days = daysSince(l.last_pulled_at);
+  const totalPulled = penarikanList
+    .filter(p => p.lokasi_id === locId)
+    .reduce((s, p) => s + Number(p.jumlah || 0), 0);
+  const pulls = penarikanList.filter(p => p.lokasi_id === locId).slice(0, 5);
+
+  const recentHTML = pulls.length
+    ? pulls.map(p => `
+        <div class="pull-card" style="margin-bottom:8px">
+          <div class="pull-card-top">
+            <div class="pull-meta">${fmtDate(p.tanggal)}</div>
+            <div class="pull-amount" style="font-size:16px">${fmt(p.jumlah)}</div>
+          </div>
+          ${p.foto_url ? `<div style="margin-top:4px"><a href="${p.foto_url}" target="_blank" style="color:var(--green);font-size:12px">📷 Lihat foto</a></div>` : ''}
+        </div>
+      `).join('')
+    : '<div style="color:var(--gray-400);font-size:13px;padding:8px 0">Belum ada penarikan.</div>';
+
+  $('modal-detail-content').innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:20px;font-weight:800">${l.nama}</div>
+        <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">
+          <span class="badge badge-type">${l.tipe || '—'}</span>
+          <span class="badge ${overdue ? 'badge-overdue' : 'badge-ok'}">${overdue ? 'Overdue' : 'OK'}</span>
+        </div>
+      </div>
+    </div>
+    <div class="detail-row"><span class="detail-key">Wilayah</span><span class="detail-val">${l.wilayah?.nama || '—'}</span></div>
+    <div class="detail-row"><span class="detail-key">Kecamatan</span><span class="detail-val">${l.kecamatan || '—'}</span></div>
+    <div class="detail-row"><span class="detail-key">Kelurahan</span><span class="detail-val">${l.kelurahan || '—'}</span></div>
+    <div class="detail-row"><span class="detail-key">Alamat</span><span class="detail-val" style="max-width:60%;word-break:break-word">${l.alamat || '—'}</span></div>
+    <div class="detail-row"><span class="detail-key">Terakhir ditarik</span><span class="detail-val">${days === 9999 ? 'Belum pernah' : `${days} hari lalu`}</span></div>
+    <div class="detail-row"><span class="detail-key">Total terkumpul</span><span class="detail-val" style="color:var(--green)">${fmt(totalPulled)}</span></div>
+    <div class="section-title" style="margin-top:16px">Riwayat Penarikan</div>
+    ${recentHTML}
+    <button class="btn btn-primary" style="margin-top:16px" id="detail-pull-btn">+ Catat Penarikan</button>
+  `;
+
+  openModal('modal-detail');
+  $('detail-pull-btn').addEventListener('click', () => {
+    closeModal('modal-detail');
+    resetLokasiSearch();
+    const loc = lokasiList.find(x => x.id === locId);
+    if (loc) selectLokasi(loc);
+    openModal('modal-penarikan');
+  });
+}
+
+// ── Tab switching ──
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeTab = btn.dataset.tab;
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    ['dashboard','lokasi','penarikan'].forEach(t => {
+      $('tab-' + t).style.display = t === activeTab ? 'block' : 'none';
+    });
+    const titles = { dashboard: 'Dashboard', lokasi: 'Daftar Lokasi', penarikan: 'Riwayat Penarikan' };
+    $('header-title').textContent = titles[activeTab];
+    $('fab-btn').style.display = activeTab === 'penarikan' ? 'flex' : (activeTab === 'lokasi' ? 'flex' : 'none');
+  });
+});
+
+$('fab-btn').style.display = 'none'; // hide on dashboard initially
+
+// ── FAB action ──
+$('fab-btn').addEventListener('click', () => {
+  if (activeTab === 'lokasi') openModal('modal-lokasi');
+  else if (activeTab === 'penarikan') openModal('modal-penarikan');
+});
+
+// ── Logout ──
+$('btn-logout').addEventListener('click', () => {
+  if (confirm('Keluar dari aplikasi?')) logout();
+});
+
+// ── Login form ──
+$('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const nama = $('login-nama').value.trim();
+  const wilayahId = $('login-wilayah').value;
+  if (!nama || !wilayahId) return;
+  const wilayah = wilayahList.find(w => w.id === wilayahId);
+  saveUser({ nama, wilayahId, wilayahNama: wilayah?.nama });
+  startApp();
+});
+
+// ── Lokasi search ──
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function renderLokasiResults(query) {
+  const q = query.trim().toLowerCase();
+  const resultsEl = $('lokasi-results');
+  if (!q) { resultsEl.innerHTML = ''; return; }
+
+  const matches = lokasiList.filter(l =>
+    [l.nama, l.kecamatan, l.kelurahan, l.alamat].some(f => f && f.toLowerCase().includes(q))
+  ).slice(0, 10);
+
+  if (!matches.length) {
+    resultsEl.innerHTML = '<div class="lokasi-no-result">Tidak ada lokasi ditemukan.</div>';
+    return;
+  }
+
+  const re = new RegExp(`(${escapeRegex(q)})`, 'gi');
+  const hl = t => t ? t.replace(re, '<mark>$1</mark>') : '';
+
+  resultsEl.innerHTML = matches.map(l => {
+    const sub = [l.kecamatan, l.kelurahan, l.wilayah?.nama].filter(Boolean).join(' · ');
+    return `<div class="lokasi-result-item" data-id="${l.id}">
+      <div class="lokasi-result-name">${hl(l.nama)}</div>
+      ${sub ? `<div class="lokasi-result-sub">${sub}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  resultsEl.querySelectorAll('.lokasi-result-item').forEach(item => {
+    item.addEventListener('mousedown', e => e.preventDefault()); // prevent blur before click
+    item.addEventListener('click', () => {
+      const loc = lokasiList.find(l => l.id === item.dataset.id);
+      if (loc) selectLokasi(loc);
+    });
+  });
+}
+
+function selectLokasi(loc) {
+  $('pen-lokasi').value = loc.id;
+  $('lokasi-selected-name').textContent = loc.nama;
+  const sub = [loc.kecamatan, loc.kelurahan, loc.wilayah?.nama].filter(Boolean).join(' · ');
+  $('lokasi-selected-sub').textContent = sub;
+  $('lokasi-selected-box').style.display = 'flex';
+  $('pen-lokasi-search').style.display = 'none';
+  $('lokasi-results').innerHTML = '';
+}
+
+function clearLokasiSelection() {
+  $('pen-lokasi').value = '';
+  $('lokasi-selected-box').style.display = 'none';
+  $('pen-lokasi-search').style.display = '';
+  $('pen-lokasi-search').value = '';
+  $('lokasi-results').innerHTML = '';
+  $('pen-lokasi-search').focus();
+}
+
+function resetLokasiSearch() {
+  $('pen-lokasi').value = '';
+  $('lokasi-selected-box').style.display = 'none';
+  $('pen-lokasi-search').style.display = '';
+  $('pen-lokasi-search').value = '';
+  $('lokasi-results').innerHTML = '';
+}
+
+// ── Jumlah formatter ──
+$('pen-jumlah').addEventListener('input', e => {
+  const raw = e.target.value.replace(/\D/g, '');
+  $('pen-jumlah-raw').value = raw;
+  e.target.value = raw ? Number(raw).toLocaleString('id-ID') : '';
+});
+$('pen-jumlah').addEventListener('keydown', e => {
+  // Allow: backspace, delete, tab, arrows, home, end
+  if ([8,9,35,36,37,38,39,40,46].includes(e.keyCode)) return;
+  // Block anything that isn't a digit
+  if (!/^\d$/.test(e.key)) e.preventDefault();
+});
+
+$('pen-lokasi-search').addEventListener('input', e => renderLokasiResults(e.target.value));
+$('pen-lokasi-search').addEventListener('blur', () => {
+  setTimeout(() => { $('lokasi-results').innerHTML = ''; }, 150);
+});
+$('lokasi-clear-btn').addEventListener('click', clearLokasiSelection);
+
+// ── Add Lokasi ──
+$('form-lokasi').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+
+  const { error } = await sb.from('lokasi').insert({
+    nama: $('lok-nama').value.trim(),
+    tipe: $('lok-tipe').value,
+    alamat: $('lok-alamat').value.trim() || null,
+    kecamatan: $('lok-kecamatan').value.trim() || null,
+    kelurahan: $('lok-kelurahan').value.trim() || null,
+    wilayah_id: $('lok-wilayah').value
+  });
+
+  btn.disabled = false; btn.textContent = 'Simpan Lokasi';
+  if (error) { toast('Gagal menyimpan: ' + error.message); return; }
+  toast('Lokasi berhasil ditambahkan!');
+  closeModal('modal-lokasi');
+  e.target.reset();
+  await refreshData();
+});
+
+// ── Add Penarikan ──
+$('pen-foto').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $('foto-label-text').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    $('foto-preview').src = ev.target.result;
+    $('foto-preview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+});
+
+$('form-penarikan').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!$('pen-lokasi').value) { toast('Pilih lokasi terlebih dahulu.'); return; }
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+
+  let fotoUrl = null;
+  const fotoFile = $('pen-foto').files[0];
+  if (fotoFile) {
+    const ext = fotoFile.name.split('.').pop();
+    const path = `penarikan/${Date.now()}.${ext}`;
+    const { error: upErr } = await sb.storage.from('foto-penarikan').upload(path, fotoFile, { upsert: true });
+    if (!upErr) {
+      const { data } = sb.storage.from('foto-penarikan').getPublicUrl(path);
+      fotoUrl = data?.publicUrl || null;
+    }
+  }
+
+  const { error } = await sb.from('penarikan').insert({
+    lokasi_id: $('pen-lokasi').value,
+    tanggal: $('pen-tanggal').value,
+    jumlah: Number($('pen-jumlah-raw').value || 0),
+    foto_url: fotoUrl,
+    catatan: $('pen-catatan').value.trim() || null,
+    petugas: user?.nama || null
+  });
+
+  btn.disabled = false; btn.textContent = 'Simpan Penarikan';
+  if (error) { toast('Gagal menyimpan: ' + error.message); return; }
+  toast('Penarikan berhasil dicatat!');
+  closeModal('modal-penarikan');
+  e.target.reset();
+  resetLokasiSearch();
+  $('foto-preview').style.display = 'none';
+  $('foto-label-text').textContent = 'Pilih foto...';
+  await refreshData();
+});
+
+// ── Data refresh ──
+async function refreshData() {
+  await Promise.all([loadLokasi(), loadPenarikan()]);
+  enrichLokasiWithPullDate();
+  renderDashboard();
+  renderLokasi();
+  renderPenarikan();
+}
+
+// ── Start app ──
+async function startApp() {
+  showScreen('app-screen');
+  $('header-user').textContent = `${user.nama} · ${user.wilayahNama}`;
+  $('pen-tanggal').value = new Date().toISOString().slice(0, 10);
+  $('tab-dashboard').innerHTML = '<div class="spinner"></div>';
+  await refreshData();
+}
+
+// ── Init ──
+async function init() {
+  localStorage.removeItem('infak_wilayah_seed_v1');
+  await loadWilayah();
+  loadUser();
+  if (user) {
+    startApp();
+  }
+}
+
+init();
+</script>
+</body>
+</html>
