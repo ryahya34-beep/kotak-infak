@@ -146,6 +146,7 @@
       width: 100%; padding: 14px; border: none; border-radius: 10px;
       font-size: 16px; font-weight: 700; cursor: pointer;
       transition: opacity .15s, transform .1s;
+      touch-action: manipulation;
     }
     .btn:active { transform: scale(.98); }
     .btn-primary { background: var(--green); color: #fff; }
@@ -1278,8 +1279,7 @@ function setupSheetDrag() {
 
     sheet.addEventListener('touchstart', e => {
       const touch = e.touches[0];
-      const sheetTop = sheet.getBoundingClientRect().top;
-      if (touch.clientY - sheetTop > 40) return;
+      if (touch.clientY - sheet.getBoundingClientRect().top > 40) return;
       startY = touch.clientY;
       lastY = startY;
       dragging = true;
