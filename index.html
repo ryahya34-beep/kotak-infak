@@ -131,6 +131,13 @@
       -webkit-appearance: none; appearance: none;
     }
     input:focus, select:focus, textarea:focus { border-color: var(--green); }
+    /* Restore native behaviour for radio/checkbox — overrides the rule above */
+    input[type="radio"], input[type="checkbox"] {
+      -webkit-appearance: auto; appearance: auto;
+      width: auto; height: auto; padding: 0;
+      border: none; border-radius: 0; background: none;
+      transition: none; flex-shrink: 0;
+    }
     textarea { resize: vertical; min-height: 80px; }
     .btn {
       width: 100%; padding: 14px; border: none; border-radius: 10px;
@@ -156,6 +163,18 @@
     .badge-warning { background: var(--orange-light); color: var(--orange); }
     .badge-type { background: var(--gray-100); color: var(--gray-600); }
     .badge-priority { background: #fff8e1; color: #b8860b; }
+
+    /* ── Export modal ── */
+    .export-opt {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 14px; border: 1.5px solid var(--gray-200);
+      border-radius: 10px; cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .export-opt + .export-opt { margin-top: 8px; }
+    .export-opt input { flex-shrink: 0; accent-color: var(--green); width: 17px; height: 17px; cursor: pointer; }
+    .export-opt:has(input[type="radio"]:checked) { border-color: var(--green); background: var(--green-light); }
+    .export-opt-sub { font-size: 12px; color: var(--gray-400); margin-top: 2px; font-weight: 400; }
 
     /* ── Location list ── */
     .filter-bar {
@@ -551,6 +570,40 @@
   </div>
 </div>
 
+<!-- ══ MODAL: Export ══ -->
+<div class="modal-backdrop" id="modal-export">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Export Data</div>
+    <div class="form-group">
+      <label>Nama File</label>
+      <input id="export-name" type="text" placeholder="Laporan Penarikan..." />
+    </div>
+    <div class="form-group">
+      <label style="margin-bottom:10px">Format</label>
+      <label class="export-opt">
+        <input type="radio" name="export-fmt" value="xlsx" checked />
+        <div><b>Excel (.xlsx)</b><div class="export-opt-sub">Microsoft Excel / Google Sheets</div></div>
+      </label>
+      <label class="export-opt">
+        <input type="radio" name="export-fmt" value="pdf" />
+        <div><b>PDF (.pdf)</b><div class="export-opt-sub">Format siap cetak</div></div>
+      </label>
+      <label class="export-opt">
+        <input type="radio" name="export-fmt" value="csv" />
+        <div><b>CSV (.csv)</b><div class="export-opt-sub">Data mentah, kompatibel semua aplikasi</div></div>
+      </label>
+    </div>
+    <div class="form-group">
+      <label class="export-opt">
+        <input type="checkbox" id="export-summary" checked />
+        <div><b>Sertakan baris total</b><div class="export-opt-sub">Total terkumpul di baris terakhir</div></div>
+      </label>
+    </div>
+    <button id="do-export-btn" class="btn btn-primary" style="margin-top:4px">📥 Export &amp; Download</button>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -591,6 +644,7 @@ let lokasiDateFrom = '';
 let lokasiDateTo = '';
 let chartBar = null;
 let chartPie = null;
+let exportData = [];
 
 // ── Helpers ──
 const $ = id => document.getElementById(id);
@@ -811,8 +865,9 @@ function renderDashboard() {
   const pieLabels = pieEntries.map(w => w.nama);
   const pieData   = pieEntries.map(w => w.total);
 
+  const dashExportBtnHTML = `<button id="dash-export-btn" style="flex:2;padding:9px 10px;border:1.5px solid var(--gray-200);border-radius:10px;background:#fff;font-size:13px;font-weight:600;color:var(--gray-600);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;touch-action:manipulation;white-space:nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>Export</button>`;
   $('tab-dashboard').innerHTML = `
-    ${dateFilterHTML('dash', dashboardDateFilter, dashboardDateFrom, dashboardDateTo)}
+    ${dateFilterHTML('dash', dashboardDateFilter, dashboardDateFrom, dashboardDateTo, dashExportBtnHTML)}
     <div class="card" style="background:var(--green);color:#fff;margin-bottom:12px">
       <div class="card-title" style="color:rgba(255,255,255,.8)">Total Terkumpul</div>
       <div class="card-value" style="color:#fff">${fmt(total)}</div>
@@ -850,6 +905,8 @@ function renderDashboard() {
     v => { dashboardDateTo = v; },
     renderDashboard
   );
+  const dashExportBtn = $('dash-export-btn');
+  if (dashExportBtn) dashExportBtn.addEventListener('click', () => openExportModal('dashboard'));
   initCharts(chartLabels, chartTotals, pieLabels, pieData);
 }
 
@@ -1119,7 +1176,7 @@ function applyDateFilter(list, filter, fromDate, toDate, dateKey = 'tanggal') {
   });
 }
 
-function dateFilterHTML(prefix, filterVal, fromVal, toVal) {
+function dateFilterHTML(prefix, filterVal, fromVal, toVal, actionHTML = '') {
   const opts = [
     ['all','Semua tanggal'],['today','Hari ini'],['yesterday','Kemarin'],
     ['7days','7 Hari terakhir'],['30days','30 Hari terakhir'],
@@ -1127,13 +1184,17 @@ function dateFilterHTML(prefix, filterVal, fromVal, toVal) {
     ['thisyear','Tahun ini'],['lastyear','Tahun lalu'],
     ['range','Rentang tanggal…']
   ].map(([v,l]) => `<option value="${v}"${filterVal===v?' selected':''}>${l}</option>`).join('');
-  return `
-    <div style="position:relative;display:flex;align-items:center;margin-bottom:8px">
+  const selectEl = `
+    <div style="position:relative;display:flex;align-items:center;flex:3;min-width:0">
       <svg style="position:absolute;left:10px;width:15px;height:15px;color:var(--gray-400);pointer-events:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
       <select id="${prefix}-date-filter" style="width:100%;padding:9px 10px 9px 30px;border:1.5px solid var(--gray-200);border-radius:10px;font-size:13px;background:#fff;outline:none;color:var(--gray-800);-webkit-appearance:none;appearance:none">${opts}</select>
-    </div>
+    </div>`;
+  const topRow = actionHTML
+    ? `<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:8px">${selectEl}${actionHTML}</div>`
+    : `<div style="margin-bottom:8px">${selectEl}</div>`;
+  return topRow + `
     <div id="${prefix}-date-range-row" style="display:${filterVal==='range'?'flex':'none'};align-items:center;gap:8px;margin-bottom:8px">
       <input id="${prefix}-date-from" type="date" value="${fromVal}" style="flex:1;padding:9px 10px;border:1.5px solid var(--gray-200);border-radius:10px;font-size:13px;outline:none"/>
       <span style="color:var(--gray-400);flex-shrink:0">—</span>
@@ -1160,6 +1221,133 @@ function syncDateFilterUI(prefix, filterVal) {
   const rr  = $(prefix + '-date-range-row');
   if (sel) sel.value = filterVal;
   if (rr)  rr.style.display = filterVal === 'range' ? 'flex' : 'none';
+}
+
+// ── Export helpers ──
+function exportDefaultName(filter, from, to) {
+  const pad = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const today = pad(new Date());
+  if (filter === 'all')       return `Laporan Penarikan ${today}`;
+  if (filter === 'today')     return `Laporan Penarikan ${today}`;
+  if (filter === 'yesterday') { const d = new Date(); d.setDate(d.getDate()-1); return `Laporan Penarikan ${pad(d)}`; }
+  if (filter === 'thismonth') { const d = new Date(); return `Laporan Penarikan ${d.toLocaleDateString('id-ID',{month:'long',year:'numeric'})}`; }
+  if (filter === 'lastmonth') { const d = new Date(); d.setMonth(d.getMonth()-1); return `Laporan Penarikan ${d.toLocaleDateString('id-ID',{month:'long',year:'numeric'})}`; }
+  if (filter === 'thisyear')  return `Laporan Penarikan ${new Date().getFullYear()}`;
+  if (filter === 'lastyear')  return `Laporan Penarikan ${new Date().getFullYear()-1}`;
+  const range = getDateRange(filter, from, to);
+  if (range && range.from && range.to) return `Laporan Penarikan ${range.from} sd ${range.to}`;
+  return `Laporan Penarikan ${today}`;
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Gagal memuat library: ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+function openExportModal(source) {
+  let list;
+  if (source === 'dashboard') {
+    list = applyDateFilter(penarikanList, dashboardDateFilter, dashboardDateFrom, dashboardDateTo);
+  } else {
+    list = applyDateFilter(penarikanList, penarikanDateFilter, penarikanDateFrom, penarikanDateTo);
+    if (penarikanSearch) {
+      const q = penarikanSearch.toLowerCase();
+      list = list.filter(p =>
+        (p.lokasi?.nama || '').toLowerCase().includes(q) ||
+        (p.lokasi?.wilayah?.nama || '').toLowerCase().includes(q) ||
+        (p.catatan || '').toLowerCase().includes(q)
+      );
+    }
+  }
+  exportData = [...list].sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
+
+  const filter = source === 'dashboard' ? dashboardDateFilter : penarikanDateFilter;
+  const from   = source === 'dashboard' ? dashboardDateFrom   : penarikanDateFrom;
+  const to     = source === 'dashboard' ? dashboardDateTo     : penarikanDateTo;
+  $('export-name').value = exportDefaultName(filter, from, to);
+  openModal('modal-export');
+}
+
+async function doExport() {
+  const format = document.querySelector('input[name="export-fmt"]:checked')?.value || 'xlsx';
+  const name = $('export-name').value.trim() || 'Laporan Penarikan';
+  const inclSummary = $('export-summary').checked;
+  const btn = $('do-export-btn');
+  btn.disabled = true; btn.textContent = 'Memproses...';
+
+  const headers = ['No', 'Nama Lokasi', 'Wilayah', 'Tipe', 'Tanggal', 'Jumlah (Rp)', 'Catatan', 'Petugas'];
+  const rows = exportData.map((p, i) => {
+    const lokData = lokasiList.find(l => l.id === p.lokasi_id);
+    return [
+      i + 1,
+      p.lokasi?.nama || '—',
+      p.lokasi?.wilayah?.nama || '—',
+      lokData?.tipe || '—',
+      p.tanggal || '—',
+      Number(p.jumlah || 0),
+      p.catatan || '',
+      p.petugas || ''
+    ];
+  });
+  if (inclSummary) {
+    const totalJumlah = exportData.reduce((s, p) => s + Number(p.jumlah || 0), 0);
+    rows.push(['', '', '', '', 'TOTAL', totalJumlah, '', '']);
+  }
+
+  try {
+    if (format === 'xlsx' || format === 'csv') {
+      await loadScript('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js');
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws['!cols'] = [4, 30, 18, 12, 14, 18, 26, 18].map(w => ({ wch: w }));
+      XLSX.utils.book_append_sheet(wb, ws, 'Penarikan');
+      if (format === 'csv') {
+        XLSX.writeFile(wb, name + '.csv', { bookType: 'csv' });
+      } else {
+        XLSX.writeFile(wb, name + '.xlsx');
+      }
+    } else {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      doc.setFontSize(14);
+      doc.text(name, 14, 16);
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text(
+        `Diekspor: ${new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}  ·  ${exportData.length} data`,
+        14, 23
+      );
+      doc.autoTable({
+        head: [headers],
+        body: rows.map(r => r.map((v, i) => i === 5 ? 'Rp ' + Number(v || 0).toLocaleString('id-ID') : String(v ?? ''))),
+        startY: 28,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [218, 41, 28], textColor: 255, fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 8 },
+          4: { cellWidth: 22 },
+          5: { cellWidth: 26, halign: 'right' }
+        },
+        alternateRowStyles: { fillColor: [250, 250, 250] }
+      });
+      doc.save(name + '.pdf');
+    }
+    toast('✅ File berhasil diunduh!');
+    closeModal('modal-export');
+  } catch (err) {
+    toast('Gagal export: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📥 Export & Download';
+  }
 }
 
 function penarikanRows() {
@@ -1216,7 +1404,7 @@ function renderPenarikan() {
         </select>
       </div>
     </div>
-    ${dateFilterHTML('pen', penarikanDateFilter, penarikanDateFrom, penarikanDateTo)}
+    ${dateFilterHTML('pen', penarikanDateFilter, penarikanDateFrom, penarikanDateTo, `<button id="pen-export-btn" style="flex:2;padding:9px 10px;border:1.5px solid var(--gray-200);border-radius:10px;background:#fff;font-size:13px;font-weight:600;color:var(--gray-600);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;touch-action:manipulation;white-space:nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>Export</button>`)}
     <div id="pen-list">${penarikanRows()}</div>
   `;
   $('pen-search-input').addEventListener('input', e => { penarikanSearch = e.target.value; renderPenarikan(); });
@@ -1227,6 +1415,7 @@ function renderPenarikan() {
     v => { penarikanDateTo = v; },
     renderPenarikan
   );
+  $('pen-export-btn').addEventListener('click', () => openExportModal('penarikan'));
 }
 
 function showLokasiDetail(locId) {
@@ -1703,6 +1892,7 @@ function setupSheetDrag() {
 async function init() {
   localStorage.removeItem('infak_wilayah_seed_v1');
   setupSheetDrag();
+  $('do-export-btn').addEventListener('click', doExport);
   await loadWilayah();
   loadUser();
   if (user) {
