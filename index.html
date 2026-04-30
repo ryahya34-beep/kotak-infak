@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Kotak Infak</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
     :root {
       --green: #DA291C;
@@ -154,6 +155,7 @@
     .badge-ok { background: var(--green-light); color: var(--green); }
     .badge-warning { background: var(--orange-light); color: var(--orange); }
     .badge-type { background: var(--gray-100); color: var(--gray-600); }
+    .badge-priority { background: #fff8e1; color: #b8860b; }
 
     /* ── Location list ── */
     .filter-bar {
@@ -178,7 +180,16 @@
       cursor: pointer; transition: box-shadow .15s;
     }
     .loc-card.overdue { border-left-color: var(--red); }
+    .loc-card.priority { border-left-color: var(--mu-gold); }
+    .loc-card.overdue.priority { border-left-color: var(--red); }
     .loc-card:active { box-shadow: var(--shadow-md); }
+    .priority-btn {
+      background: none; border: none; cursor: pointer;
+      padding: 4px; border-radius: 6px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .15s; touch-action: manipulation;
+    }
+    .priority-btn:active { transform: scale(.8); }
     .loc-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
     .loc-name { font-size: 15px; font-weight: 700; }
     .loc-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
@@ -566,9 +577,20 @@ let activeFilter = 'all';
 let editingLokasiId = null;
 let editingPenarikanId = null;
 let lokasiSearch = '';
-let lokasiSort = 'nama';
+let lokasiSort = 'prioritas';
 let penarikanSearch = '';
 let penarikanSort = 'terbaru';
+let penarikanDateFilter = 'all';
+let penarikanDateFrom = '';
+let penarikanDateTo = '';
+let dashboardDateFilter = 'all';
+let dashboardDateFrom = '';
+let dashboardDateTo = '';
+let lokasiDateFilter = 'all';
+let lokasiDateFrom = '';
+let lokasiDateTo = '';
+let chartBar = null;
+let chartPie = null;
 
 // ── Helpers ──
 const $ = id => document.getElementById(id);
@@ -722,11 +744,14 @@ function enrichLokasiWithPullDate() {
 
 // ── Tab rendering ──
 function renderDashboard() {
-  const total = penarikanList.reduce((s, p) => s + Number(p.jumlah || 0), 0);
-  const overdueCount = lokasiList.filter(isOverdue).length;
-  const totalLokasi = lokasiList.length;
+  // Filtered penarikan (date filter applies to all penarikan-based metrics)
+  const fp = applyDateFilter(penarikanList, dashboardDateFilter, dashboardDateFrom, dashboardDateTo);
 
-  // Per wilayah totals
+  const total = fp.reduce((s, p) => s + Number(p.jumlah || 0), 0);
+  const overdueCount = lokasiList.filter(isOverdue).length;  // lokasi stat — unfiltered
+  const totalLokasi  = lokasiList.length;                    // lokasi stat — unfiltered
+
+  // Per wilayah totals (uses filtered penarikan)
   const wilayahMap = {};
   wilayahList.forEach(w => { wilayahMap[w.id] = { nama: w.nama, total: 0, lokasi: 0, overdue: 0 }; });
   lokasiList.forEach(l => {
@@ -736,7 +761,7 @@ function renderDashboard() {
       if (isOverdue(l)) wilayahMap[wid].overdue++;
     }
   });
-  penarikanList.forEach(p => {
+  fp.forEach(p => {
     const wid = p.lokasi?.wilayah_id;
     if (wid && wilayahMap[wid]) wilayahMap[wid].total += Number(p.jumlah || 0);
   });
@@ -756,8 +781,8 @@ function renderDashboard() {
       </div>
     `).join('');
 
-  // Recent 5 penarikan
-  const recentRows = penarikanList.slice(0, 5).map(p => `
+  // Recent 5 penarikan (filtered)
+  const recentRows = fp.slice(0, 5).map(p => `
     <div class="pull-card">
       <div class="pull-card-top">
         <div class="pull-loc">${p.lokasi?.nama || '—'}</div>
@@ -767,7 +792,27 @@ function renderDashboard() {
     </div>
   `).join('');
 
+  // ── Bar chart data: last 6 months (filtered) ──
+  const now = new Date();
+  const chartMonths = [];
+  const chartLabels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    chartMonths.push({ year: d.getFullYear(), month: d.getMonth() });
+    chartLabels.push(d.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }));
+  }
+  const chartTotals = chartMonths.map(({ year, month }) =>
+    fp.filter(p => { if (!p.tanggal) return false; const d = new Date(p.tanggal); return d.getFullYear() === year && d.getMonth() === month; })
+      .reduce((s, p) => s + Number(p.jumlah || 0), 0)
+  );
+
+  // ── Pie chart data: per wilayah (filtered) ──
+  const pieEntries = Object.values(wilayahMap).filter(w => w.lokasi > 0).sort((a,b) => b.total - a.total);
+  const pieLabels = pieEntries.map(w => w.nama);
+  const pieData   = pieEntries.map(w => w.total);
+
   $('tab-dashboard').innerHTML = `
+    ${dateFilterHTML('dash', dashboardDateFilter, dashboardDateFrom, dashboardDateTo)}
     <div class="card" style="background:var(--green);color:#fff;margin-bottom:12px">
       <div class="card-title" style="color:rgba(255,255,255,.8)">Total Terkumpul</div>
       <div class="card-value" style="color:#fff">${fmt(total)}</div>
@@ -782,17 +827,138 @@ function renderDashboard() {
         <div class="value">${overdueCount}</div>
       </div>
     </div>
+
+    <div class="section-title">Penarikan per Bulan</div>
+    <div class="card" style="padding:14px 12px 10px;margin-bottom:12px">
+      <canvas id="chart-bar" style="height:180px"></canvas>
+    </div>
+
+    <div class="section-title">Total per Wilayah</div>
+    <div class="card" style="padding:14px 12px 16px;margin-bottom:12px">
+      <canvas id="chart-pie" style="height:260px"></canvas>
+    </div>
+
     <div class="section-title">Per Wilayah</div>
     ${wilayahRows || '<div class="empty"><p>Belum ada data wilayah.</p></div>'}
     <div class="section-title">Penarikan Terakhir</div>
     ${recentRows || '<div class="empty"><p>Belum ada penarikan.</p></div>'}
   `;
+
+  wireDateFilter('dash',
+    v => { dashboardDateFilter = v; },
+    v => { dashboardDateFrom = v; },
+    v => { dashboardDateTo = v; },
+    renderDashboard
+  );
+  initCharts(chartLabels, chartTotals, pieLabels, pieData);
+}
+
+function initCharts(monthLabels, monthTotals, pieLabels, pieData) {
+  if (chartBar) { chartBar.destroy(); chartBar = null; }
+  if (chartPie) { chartPie.destroy(); chartPie = null; }
+
+  const barCtx = $('chart-bar')?.getContext('2d');
+  if (barCtx) {
+    chartBar = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: monthLabels,
+        datasets: [{
+          label: 'Total',
+          data: monthTotals,
+          backgroundColor: 'rgba(218,41,28,.78)',
+          hoverBackgroundColor: '#DA291C',
+          borderRadius: 6,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => 'Rp ' + Number(ctx.raw).toLocaleString('id-ID')
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(0,0,0,.05)' },
+            ticks: {
+              font: { size: 10 },
+              callback: v => {
+                if (v === 0) return 'Rp 0';
+                if (v >= 1000000) return 'Rp ' + (v / 1000000).toFixed(v % 1000000 === 0 ? 0 : 1) + 'jt';
+                if (v >= 1000) return 'Rp ' + (v / 1000).toFixed(0) + 'rb';
+                return 'Rp ' + v;
+              }
+            }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { font: { size: 11 } }
+          }
+        }
+      }
+    });
+  }
+
+  const pieCtx = $('chart-pie')?.getContext('2d');
+  if (pieCtx) {
+    const COLORS = ['#DA291C','#FBE122','#1e88e5','#43a047','#fb8c00','#8e24aa','#e91e63','#00acc1','#6d4c41','#546e7a'];
+    const hasData = pieData.some(v => v > 0);
+    chartPie = new Chart(pieCtx, {
+      type: 'doughnut',
+      data: {
+        labels: hasData ? pieLabels : ['Belum ada data'],
+        datasets: [{
+          data: hasData ? pieData : [1],
+          backgroundColor: hasData ? COLORS.slice(0, pieLabels.length) : ['#e5e7eb'],
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { bottom: 4 } },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11 }, padding: 14, boxWidth: 12, usePointStyle: true }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => hasData ? `${ctx.label}: Rp ${Number(ctx.raw).toLocaleString('id-ID')}` : ctx.label
+            }
+          }
+        },
+        cutout: '55%'
+      }
+    });
+  }
 }
 
 function lokasiCards() {
   let filtered = lokasiList;
   if (activeFilter === 'overdue') filtered = lokasiList.filter(isOverdue);
   else if (activeFilter !== 'all') filtered = lokasiList.filter(l => l.wilayah_id === activeFilter);
+  // Date filter on last penarikan date
+  if (lokasiDateFilter !== 'all') {
+    const range = getDateRange(lokasiDateFilter, lokasiDateFrom, lokasiDateTo);
+    if (range) {
+      filtered = filtered.filter(l => {
+        const d = l.last_pulled_at;
+        if (!d) return false;
+        if (range.from && d < range.from) return false;
+        if (range.to && d > range.to) return false;
+        return true;
+      });
+    }
+  }
   if (lokasiSearch) {
     const q = lokasiSearch.toLowerCase();
     filtered = filtered.filter(l =>
@@ -800,6 +966,11 @@ function lokasiCards() {
     );
   }
   filtered = [...filtered].sort((a, b) => {
+    if (lokasiSort === 'prioritas') {
+      const pa = !!a.prioritas, pb = !!b.prioritas;
+      if (pa !== pb) return pb ? 1 : -1;
+      return daysSince(b.last_pulled_at) - daysSince(a.last_pulled_at);
+    }
     if (lokasiSort === 'nama') return a.nama.localeCompare(b.nama, 'id');
     if (lokasiSort === 'nama-desc') return b.nama.localeCompare(a.nama, 'id');
     if (lokasiSort === 'terbaru') return daysSince(a.last_pulled_at) - daysSince(b.last_pulled_at);
@@ -811,12 +982,29 @@ function lokasiCards() {
   return filtered.map(l => {
     const overdue = isOverdue(l);
     const days = daysSince(l.last_pulled_at);
-    const badge = overdue ? `<span class="badge badge-overdue">Overdue</span>`
+    const pri = !!l.prioritas;
+    const statusBadge = overdue ? `<span class="badge badge-overdue">Overdue</span>`
       : days <= 14 ? `<span class="badge badge-ok">Baru ditarik</span>`
       : `<span class="badge badge-warning">Perlu perhatian</span>`;
-    return `<div class="loc-card ${overdue?'overdue':''}" data-id="${l.id}">
-      <div class="loc-card-top"><div class="loc-name">${l.nama}</div>${badge}</div>
-      <div class="loc-meta"><span class="badge badge-type">${l.tipe||'—'}</span><span style="font-size:12px;color:var(--gray-400)">${l.wilayah?.nama||'—'}</span></div>
+    const starFill  = pri ? '#FBE122' : 'none';
+    const starStroke = pri ? '#b8860b' : 'var(--gray-400)';
+    return `<div class="loc-card ${overdue?'overdue':''} ${pri?'priority':''}" data-id="${l.id}">
+      <div class="loc-card-top">
+        <div class="loc-name">${l.nama}</div>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+          ${statusBadge}
+          <button class="priority-btn" data-id="${l.id}" title="${pri?'Hapus prioritas':'Tandai prioritas'}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="${starFill}" stroke="${starStroke}" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="loc-meta">
+        <span class="badge badge-type">${l.tipe||'—'}</span>
+        ${pri ? '<span class="badge badge-priority">★ Prioritas</span>' : ''}
+        <span style="font-size:12px;color:var(--gray-400)">${l.wilayah?.nama||'—'}</span>
+      </div>
       ${l.alamat?`<div class="loc-addr">${l.alamat}</div>`:''}
       <div class="loc-footer"><span>Terakhir: ${days===9999?'Belum pernah ditarik':`${days} hari lalu`}</span><span style="color:var(--green);font-weight:600">›</span></div>
     </div>`;
@@ -833,11 +1021,9 @@ function renderLokasi() {
   // Partial update — only replace the card list, keep controls intact
   if ($('lokasi-list')) {
     $('lokasi-list').innerHTML = lokasiCards();
+    syncDateFilterUI('lok', lokasiDateFilter);
     $('tab-lokasi').querySelectorAll('.filter-chip').forEach(b =>
       b.classList.toggle('active', b.dataset.filter === activeFilter)
-    );
-    $('lokasi-list').querySelectorAll('.loc-card').forEach(card =>
-      card.addEventListener('click', () => showLokasiDetail(card.dataset.id))
     );
     return;
   }
@@ -852,6 +1038,7 @@ function renderLokasi() {
       <div class="sort-wrap">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M4 6h16M7 12h10M10 18h4"/></svg>
         <select id="lokasi-sort-select">
+          <option value="prioritas" ${lokasiSort==='prioritas'?'selected':''}>⭐ Prioritas & Terlama</option>
           <option value="nama" ${lokasiSort==='nama'?'selected':''}>A–Z</option>
           <option value="nama-desc" ${lokasiSort==='nama-desc'?'selected':''}>Z–A</option>
           <option value="terbaru" ${lokasiSort==='terbaru'?'selected':''}>Terbaru ditarik</option>
@@ -859,21 +1046,125 @@ function renderLokasi() {
         </select>
       </div>
     </div>
+    ${dateFilterHTML('lok', lokasiDateFilter, lokasiDateFrom, lokasiDateTo)}
     <div class="filter-bar">${chipsHTML}</div>
     <div id="lokasi-list">${lokasiCards()}</div>
   `;
   $('lokasi-search-input').addEventListener('input', e => { lokasiSearch = e.target.value; renderLokasi(); });
   $('lokasi-sort-select').addEventListener('change', e => { lokasiSort = e.target.value; renderLokasi(); });
+  wireDateFilter('lok',
+    v => { lokasiDateFilter = v; },
+    v => { lokasiDateFrom = v; },
+    v => { lokasiDateTo = v; },
+    renderLokasi
+  );
   $('tab-lokasi').querySelectorAll('.filter-chip').forEach(btn =>
     btn.addEventListener('click', () => { activeFilter = btn.dataset.filter; renderLokasi(); })
   );
-  $('lokasi-list').querySelectorAll('.loc-card').forEach(card =>
-    card.addEventListener('click', () => showLokasiDetail(card.dataset.id))
-  );
+  // Single delegated listener — handles priority btn + card tap
+  $('lokasi-list').addEventListener('click', e => {
+    const btn = e.target.closest('.priority-btn');
+    if (btn) { togglePriority(btn.dataset.id); return; }
+    const card = e.target.closest('.loc-card');
+    if (card) showLokasiDetail(card.dataset.id);
+  });
+}
+
+function getDateRange(filter, fromDate = '', toDate = '') {
+  const pad = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const t = pad(today);
+  switch (filter) {
+    case 'today':     return { from: t, to: t };
+    case 'yesterday': { const d = new Date(today); d.setDate(d.getDate() - 1); const s = pad(d); return { from: s, to: s }; }
+    case '7days':     { const d = new Date(today); d.setDate(d.getDate() - 6); return { from: pad(d), to: t }; }
+    case '30days':    { const d = new Date(today); d.setDate(d.getDate() - 29); return { from: pad(d), to: t }; }
+    case 'thismonth': return { from: pad(new Date(today.getFullYear(), today.getMonth(), 1)), to: t };
+    case 'lastmonth': return { from: pad(new Date(today.getFullYear(), today.getMonth() - 1, 1)), to: pad(new Date(today.getFullYear(), today.getMonth(), 0)) };
+    case 'thisyear':  return { from: pad(new Date(today.getFullYear(), 0, 1)), to: t };
+    case 'lastyear':  return { from: pad(new Date(today.getFullYear() - 1, 0, 1)), to: pad(new Date(today.getFullYear() - 1, 11, 31)) };
+    case 'range':     return { from: fromDate, to: toDate };
+    default:          return null;
+  }
+}
+
+async function togglePriority(locId) {
+  const lok = lokasiList.find(l => l.id === locId);
+  if (!lok) return;
+  const newVal = !lok.prioritas;
+  // Optimistic update
+  lokasiList = lokasiList.map(l => l.id === locId ? { ...l, prioritas: newVal } : l);
+  renderLokasi();
+  const { error } = await sb.from('lokasi').update({ prioritas: newVal }).eq('id', locId);
+  if (error) {
+    // Revert
+    lokasiList = lokasiList.map(l => l.id === locId ? { ...l, prioritas: !newVal } : l);
+    renderLokasi();
+    toast('Gagal menyimpan: ' + error.message);
+    return;
+  }
+  toast(newVal ? '⭐ Ditandai sebagai prioritas' : 'Prioritas dihapus');
+}
+
+function applyDateFilter(list, filter, fromDate, toDate, dateKey = 'tanggal') {
+  if (filter === 'all') return list;
+  const range = getDateRange(filter, fromDate, toDate);
+  if (!range) return list;
+  return list.filter(item => {
+    const d = item[dateKey];
+    if (!d) return false;
+    if (range.from && d < range.from) return false;
+    if (range.to && d > range.to) return false;
+    return true;
+  });
+}
+
+function dateFilterHTML(prefix, filterVal, fromVal, toVal) {
+  const opts = [
+    ['all','Semua tanggal'],['today','Hari ini'],['yesterday','Kemarin'],
+    ['7days','7 Hari terakhir'],['30days','30 Hari terakhir'],
+    ['thismonth','Bulan ini'],['lastmonth','Bulan lalu'],
+    ['thisyear','Tahun ini'],['lastyear','Tahun lalu'],
+    ['range','Rentang tanggal…']
+  ].map(([v,l]) => `<option value="${v}"${filterVal===v?' selected':''}>${l}</option>`).join('');
+  return `
+    <div style="position:relative;display:flex;align-items:center;margin-bottom:8px">
+      <svg style="position:absolute;left:10px;width:15px;height:15px;color:var(--gray-400);pointer-events:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <select id="${prefix}-date-filter" style="width:100%;padding:9px 10px 9px 30px;border:1.5px solid var(--gray-200);border-radius:10px;font-size:13px;background:#fff;outline:none;color:var(--gray-800);-webkit-appearance:none;appearance:none">${opts}</select>
+    </div>
+    <div id="${prefix}-date-range-row" style="display:${filterVal==='range'?'flex':'none'};align-items:center;gap:8px;margin-bottom:8px">
+      <input id="${prefix}-date-from" type="date" value="${fromVal}" style="flex:1;padding:9px 10px;border:1.5px solid var(--gray-200);border-radius:10px;font-size:13px;outline:none"/>
+      <span style="color:var(--gray-400);flex-shrink:0">—</span>
+      <input id="${prefix}-date-to" type="date" value="${toVal}" style="flex:1;padding:9px 10px;border:1.5px solid var(--gray-200);border-radius:10px;font-size:13px;outline:none"/>
+    </div>`;
+}
+
+function wireDateFilter(prefix, setFilter, setFrom, setTo, refresh) {
+  const sel = $(prefix + '-date-filter');
+  const rr  = $(prefix + '-date-range-row');
+  if (sel) sel.addEventListener('change', e => {
+    setFilter(e.target.value);
+    if (rr) rr.style.display = e.target.value === 'range' ? 'flex' : 'none';
+    refresh();
+  });
+  const fromEl = $(prefix + '-date-from');
+  const toEl   = $(prefix + '-date-to');
+  if (fromEl) fromEl.addEventListener('change', e => { setFrom(e.target.value); refresh(); });
+  if (toEl)   toEl.addEventListener('change',   e => { setTo(e.target.value);   refresh(); });
+}
+
+function syncDateFilterUI(prefix, filterVal) {
+  const sel = $(prefix + '-date-filter');
+  const rr  = $(prefix + '-date-range-row');
+  if (sel) sel.value = filterVal;
+  if (rr)  rr.style.display = filterVal === 'range' ? 'flex' : 'none';
 }
 
 function penarikanRows() {
-  let list = penarikanList;
+  let list = applyDateFilter(penarikanList, penarikanDateFilter, penarikanDateFrom, penarikanDateTo);
+  // Search filter
   if (penarikanSearch) {
     const q = penarikanSearch.toLowerCase();
     list = list.filter(p =>
@@ -907,6 +1198,7 @@ function renderPenarikan() {
   // Partial update — keep controls, only replace list
   if ($('pen-list')) {
     $('pen-list').innerHTML = penarikanRows();
+    syncDateFilterUI('pen', penarikanDateFilter);
     return;
   }
 
@@ -924,10 +1216,17 @@ function renderPenarikan() {
         </select>
       </div>
     </div>
+    ${dateFilterHTML('pen', penarikanDateFilter, penarikanDateFrom, penarikanDateTo)}
     <div id="pen-list">${penarikanRows()}</div>
   `;
   $('pen-search-input').addEventListener('input', e => { penarikanSearch = e.target.value; renderPenarikan(); });
   $('pen-sort-select').addEventListener('change', e => { penarikanSort = e.target.value; renderPenarikan(); });
+  wireDateFilter('pen',
+    v => { penarikanDateFilter = v; },
+    v => { penarikanDateFrom = v; },
+    v => { penarikanDateTo = v; },
+    renderPenarikan
+  );
 }
 
 function showLokasiDetail(locId) {
