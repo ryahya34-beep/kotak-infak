@@ -261,6 +261,7 @@
       width: 100%; max-width: 480px;
       max-height: 90vh; overflow-y: auto;
       animation: slideUp .25s ease;
+      overscroll-behavior-y: contain;
     }
     @keyframes slideUp {
       from { transform: translateY(100%); }
@@ -1846,22 +1847,39 @@ function setupSheetDrag() {
     const backdrop = sheet.parentElement;
     let startY = 0, lastY = 0, dragging = false;
 
+    // passive:true is fine for touchstart — we don't need preventDefault here
     sheet.addEventListener('touchstart', e => {
-      const touch = e.touches[0];
-      if (touch.clientY - sheet.getBoundingClientRect().top > 40) return;
-      startY = touch.clientY;
-      lastY = startY;
-      dragging = true;
-      sheet.style.transition = 'none';
+      startY = e.touches[0].clientY;
+      lastY  = startY;
+      // Only activate handle-drag when the touch begins within the top 44px strip
+      const fromTop = startY - sheet.getBoundingClientRect().top;
+      if (fromTop <= 44) {
+        dragging = true;
+        sheet.style.transition = 'none';
+      }
     }, { passive: true });
 
+    // MUST be non-passive so we can call preventDefault and block pull-to-refresh
     sheet.addEventListener('touchmove', e => {
-      if (!dragging) return;
-      lastY = e.touches[0].clientY;
-      const delta = Math.max(0, lastY - startY);
-      sheet.style.transform = `translateY(${delta}px)`;
-      backdrop.style.background = `rgba(0,0,0,${Math.max(0, 0.45 - delta / 350).toFixed(3)})`;
-    }, { passive: true });
+      const currentY = e.touches[0].clientY;
+      const dy = currentY - startY;
+
+      if (dragging) {
+        // Actively dragging the handle — move the sheet and block pull-to-refresh
+        e.preventDefault();
+        lastY = currentY;
+        const delta = Math.max(0, dy);
+        sheet.style.transform = `translateY(${delta}px)`;
+        backdrop.style.background = `rgba(0,0,0,${Math.max(0, 0.45 - delta / 350).toFixed(3)})`;
+        return;
+      }
+
+      // Not dragging the handle: still block pull-to-refresh when the sheet's
+      // own scroll is at the top and the gesture is downward
+      if (sheet.scrollTop === 0 && dy > 0) {
+        e.preventDefault();
+      }
+    }, { passive: false });
 
     sheet.addEventListener('touchend', () => {
       if (!dragging) return;
